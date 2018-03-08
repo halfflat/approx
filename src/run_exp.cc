@@ -1,9 +1,9 @@
+#include <cfloat>
+
 #include "fmaselect.h"
 #include "horner.h"
-#include "ulp_check.h"
-
-#include <cfloat>
-#include <random>
+#include "common_opt.h"
+#include "harness.h"
 
 // exp(x) following Cephes library algorithm;
 // order 6 rational poly approximation R(x)/R(-x)
@@ -51,24 +51,47 @@ double exp_c(double x) {
     return std::scalbn(expg, (int)n);
 }
 
-using std::cout;
+#if 0
+void harness(bool raw, int N, double lb, double ub, int seed=12345) {
+    using std::cout;
+    using std::setw;
 
-void run_check(double lb, double ub, int n) {
-    std::minstd_rand R(12345);
+    std::mt19937_64 R(seed);
     std::uniform_real_distribution<> u(lb, ub);
 
-    auto result = ulp_check(n,
-         [](double x) { return std::exp(x); },
-         exp_c,
-         [&]() { return u(R); });
+    auto gen  = [&]() { return u(R); };
+    auto ref  = [](double x) { return std::exp(x); };
+    auto eval = &exp_c;
 
-    cout << "exp vs exp_c on [" << lb << ", " << ub << "]\n";
-    pretty_print(std::cout, result);
-    cout << '\n';
+    if (raw) {
+        cout << "# lb=" << lb << "; ub=" << ub << '\n';
+        cout << "# x exp, exp_c\n";
+        for (std::size_t i = 0; i<N; ++i) {
+            double x = gen();
+            cout << std::setprecision(18)
+                 << setw(25) << x << setw(25) << ref(x) << setw(25) << eval(x) << '\n';
+        }
+    }
+    else {
+        auto result = ulp_check(N, ref, eval, gen);
+
+        cout << "exp vs exp_c on [" << lb << ", " << ub << "]\n";
+        pretty_print(std::cout, result);
+        cout << '\n';
+    }
 }
+#endif
 
-int main() {
-    int N = 100000;
-    run_check(-0.1, 0.1, N);
-    run_check(exp_minarg, exp_maxarg, N);
+int main(int argc, char** argv) {
+    auto opt = common_options(argc, argv);
+    if (opt.help) {
+        std::cout << "usage: run_exp [OPTIONS]\n" << common_option_summary;
+        return 0;
+    }
+
+    auto exp = [](double x) { return std::exp(x); };
+
+    harness<double>(std::cout, opt, "std::exp", exp, "exp_c", exp_c, -0.1, 0.1);
+    harness<double>(std::cout, opt, "std::exp", exp, "exp_c", exp_c, exp_minarg, exp_maxarg);
+    return 0;
 }
