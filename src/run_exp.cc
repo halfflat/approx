@@ -46,52 +46,23 @@ double exp_c(double x) {
     auto even = horner(gg, Q0exp, Q1exp, Q2exp, Q3exp);
 
     // Compute R(g)/R(-g) - 1 = 2*g*P(g^2) / (Q(g^2)-g*P(g^2))
-
     auto expg = fma(2., odd/(even-odd), 1.);
+
     return std::scalbn(expg, (int)n);
 }
 
-#if 0
-void harness(bool raw, int N, double lb, double ub, int seed=12345) {
-    using std::cout;
-    using std::setw;
-
-    std::mt19937_64 R(seed);
-    std::uniform_real_distribution<> u(lb, ub);
-
-    auto gen  = [&]() { return u(R); };
-    auto ref  = [](double x) { return std::exp(x); };
-    auto eval = &exp_c;
-
-    if (raw) {
-        cout << "# lb=" << lb << "; ub=" << ub << '\n';
-        cout << "# x exp, exp_c\n";
-        for (std::size_t i = 0; i<N; ++i) {
-            double x = gen();
-            cout << std::setprecision(18)
-                 << setw(25) << x << setw(25) << ref(x) << setw(25) << eval(x) << '\n';
-        }
-    }
-    else {
-        auto result = ulp_check(N, ref, eval, gen);
-
-        cout << "exp vs exp_c on [" << lb << ", " << ub << "]\n";
-        pretty_print(std::cout, result);
-        cout << '\n';
-    }
-}
-#endif
-
 int main(int argc, char** argv) {
+    using std::cout;
+
     auto opt = common_options(argc, argv);
     if (opt.help) {
-        std::cout << "usage: run_exp [OPTIONS]\n" << common_option_summary;
+        cout << "usage: run_exp [OPTIONS]\n" << common_option_summary;
         return 0;
     }
 
-    auto exp = [](double x) { return std::exp(x); };
+    auto stdexp = [](double x) { return std::exp(x); };
 
-    harness<double>(std::cout, opt, "std::exp", exp, "exp_c", exp_c, -0.1, 0.1);
-    harness<double>(std::cout, opt, "std::exp", exp, "exp_c", exp_c, exp_minarg, exp_maxarg);
+    harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, -0.1, 0.1);
+    harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, exp_minarg, exp_maxarg);
     return 0;
 }
