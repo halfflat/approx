@@ -1,4 +1,5 @@
 #include <cfloat>
+#include <cstring>
 
 #include "fmaselect.h"
 #include "horner.h"
@@ -45,24 +46,60 @@ double exp_c(double x) {
     auto odd = g * horner(gg, P0exp, P1exp, P2exp);
     auto even = horner(gg, Q0exp, Q1exp, Q2exp, Q3exp);
 
-    // Compute R(g)/R(-g) - 1 = 2*g*P(g^2) / (Q(g^2)-g*P(g^2))
+    // Compute R(g)/R(-g) = 1 + 2*g*P(g^2) / (Q(g^2)-g*P(g^2))
     auto expg = fma(2., odd/(even-odd), 1.);
 
     return std::scalbn(expg, (int)n);
 }
 
+double expm1_c(double x) {
+    double n = std::floor(fma(ln2inv, x, 0.5));
+    double g = fma(n, -ln2C1, x);
+    g = fma(n, -ln2C2, g);
+
+    auto gg = g*g;
+
+    auto odd = g * horner(gg, P0exp, P1exp, P2exp);
+    auto even = horner(gg, Q0exp, Q1exp, Q2exp, Q3exp);
+
+    // Compute R(g)/R(-g) - 1 = 2*g*P(g^2) / (Q(g^2)-g*P(g^2))
+    auto expgm1 = 2*odd/(even-odd);
+
+    return n==0? expgm1: std::scalbn(expgm1+1., (int)n)-1;
+}
+
 int main(int argc, char** argv) {
     using std::cout;
+    using std::strcmp;
 
     auto opt = common_options(argc, argv);
     if (opt.help) {
-        cout << "usage: run_exp [OPTIONS]\n" << common_option_summary;
+        cout << "usage: run_exp [exp|expm1|expm1naive] [[OPTIONS]\n" << common_option_summary;
         return 0;
     }
 
-    auto stdexp = [](double x) { return std::exp(x); };
+    bool run_exp = false, run_expm1 = false, run_expm1naive = false;
+    for (char** arg = argv+1; *arg; ++arg) {
+        run_exp |= !strcmp(*arg, "exp");
+        run_expm1 |= !strcmp(*arg, "expm1");
+        run_expm1naive |= !strcmp(*arg, "expm1naive");
+    }
 
-    harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, -0.1, 0.1);
-    harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, exp_minarg, exp_maxarg);
+    auto stdexp = [](double x) { return std::exp(x); };
+    auto stdexpm1 = [](double x) { return std::expm1(x); };
+    auto expm1_naive = [](double x) { return std::exp(x)-1.; };
+
+    if (run_exp) {
+        harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, -0.1, 0.1);
+        harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, exp_minarg, exp_maxarg);
+    }
+    if (run_expm1) {
+        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_c", expm1_c, -0.1, 0.1);
+        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_c", expm1_c, exp_minarg, exp_maxarg);
+    }
+    if (run_expm1naive) {
+        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_naive", expm1_naive, -0.1, 0.1);
+        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_naive", expm1_naive, exp_minarg, exp_maxarg);
+    }
     return 0;
 }
