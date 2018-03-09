@@ -48,7 +48,7 @@ ulp_check_result<V> ulp_check(std::size_t n, RefFn ref, EvalFn eval, Generator g
 }
 
 template <typename V>
-std::ostream& pretty_print(std::ostream& out, const ulp_check_result<V>& h, int maxbars = 100, int barwidth = 80) {
+std::ostream& pretty_print(std::ostream& out, const ulp_check_result<V>& h, int maxbars = 80, int barwidth = 80) {
     using uintmax = std::uintmax_t;
 
     if (h.ulp_hist.empty()) return out;
@@ -58,6 +58,21 @@ std::ostream& pretty_print(std::ostream& out, const ulp_check_result<V>& h, int 
 
     for (auto& kv: h.ulp_hist) {
         if (kv.second>maxc) maxc = kv.second;
+    }
+
+    // search heuristic for a reasonable cut off:
+    double threshold = 0;
+    if (nbin > maxbars) {
+        const double alpha = 0.7;
+        double tmin = maxc/barwidth;
+        for (double t = maxc*alpha; t>tmin; t *= alpha) {
+            std::size_t count = 0;
+            for (auto& kv: h.ulp_hist) {
+                if (kv.second>t) ++count;
+            }
+            if (count>maxbars) break;
+        }
+        threshold = tmin/alpha;
     }
 
     int margin = std::ceil(std::log10(h.ulp_hist.end()->first));
@@ -73,28 +88,36 @@ std::ostream& pretty_print(std::ostream& out, const ulp_check_result<V>& h, int 
         out << '\n';
     };
 
-    double threshold = nbin>maxbars? (double)h.count/nbin: 0;
+    uintmax remaining = h.count;
     int lines = 1;
+    bool trailing = false;
 
     uintmax i = h.ulp_hist.begin()->first;
     for (auto& kv: h.ulp_hist) {
-        if (kv.second<threshold) continue;
-
-        if (kv.first > i+3 || kv.first > i && threshold > 0) {
-            out << "//\n";
-        }
-        else {
-            while (i<kv.first) emit({i++, uintmax(0)});
+        if (kv.second<threshold) {
+            trailing = true;
+            continue;
         }
 
+        if (kv.first > i) {
+            if (threshold==0 && kv.first < i+4)
+                while (i<kv.first) emit({i++, uintmax(0)});
+            else
+                out << "//\n";
+        }
+
+        trailing = false;
         emit(kv);
         i = kv.first+1;
         ++lines;
+
         if (lines>maxbars) {
-            out << "+++\n";
+            trailing = true;
             break;
         }
     }
+
+    if (trailing) out << "+++\n";
 
     out << "worst case:\n"
         << std::setprecision(17)

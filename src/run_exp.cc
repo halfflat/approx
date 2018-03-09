@@ -53,7 +53,10 @@ double exp_c(double x) {
 }
 
 double expm1_c(double x) {
-    double n = std::floor(fma(ln2inv, x, 0.5));
+    if (std::abs(x)>=0.5) return exp_c(x)-1;
+
+    double n = std::abs(x)>=0.5? std::floor(fma(ln2inv, x, 0.5)): 0;
+
     double g = fma(n, -ln2C1, x);
     g = fma(n, -ln2C2, g);
 
@@ -65,7 +68,7 @@ double expm1_c(double x) {
     // Compute R(g)/R(-g) - 1 = 2*g*P(g^2) / (Q(g^2)-g*P(g^2))
     auto expgm1 = 2*odd/(even-odd);
 
-    return n==0? expgm1: std::scalbn(expgm1+1., (int)n)-1;
+    return std::scalbn(expgm1, (int)n)+(std::scalbn(1., (int)n)-1.);
 }
 
 int main(int argc, char** argv) {
