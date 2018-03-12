@@ -5,6 +5,7 @@
 #include "horner.h"
 #include "common_opt.h"
 #include "harness.h"
+#include "ref_functions.h"
 
 // exp(x) following Cephes library algorithm;
 // order 6 rational poly approximation R(x)/R(-x)
@@ -71,38 +72,65 @@ double expm1_c(double x) {
     return std::scalbn(expgm1, (int)n)+(std::scalbn(1., (int)n)-1.);
 }
 
+double std_exprel(double x) {
+    return x+1.==x? 1.: std::expm1(x)/x;
+}
+
+double exprel_c(double x) {
+    return x+1.==x? 1.: expm1_c(x)/x;
+}
+
 int main(int argc, char** argv) {
     using std::cout;
     using std::strcmp;
 
     auto opt = common_options(argc, argv);
     if (opt.help) {
-        cout << "usage: run_exp [exp|expm1|expm1naive] [[OPTIONS]\n" << common_option_summary;
+        cout << "usage: run_exp [exp|expm1|exprel|expm1naive] [[OPTIONS]\n" << common_option_summary;
         return 0;
     }
 
-    bool run_exp = false, run_expm1 = false, run_expm1naive = false;
+    bool run_exp = false, run_expm1 = false, run_expm1naive = false, run_exprel = false;
     for (char** arg = argv+1; *arg; ++arg) {
         run_exp |= !strcmp(*arg, "exp");
         run_expm1 |= !strcmp(*arg, "expm1");
         run_expm1naive |= !strcmp(*arg, "expm1naive");
+        run_exprel |= !strcmp(*arg, "exprel");
     }
 
-    auto stdexp = [](double x) { return std::exp(x); };
-    auto stdexpm1 = [](double x) { return std::expm1(x); };
+#if USE_ARB
+    auto ref_exp = arb_exp_double;
+    auto ref_expm1 = arb_expm1_double;
+    auto ref_exprel = arb_exprel_double;
+#else
+    auto ref_exp = std_exp_double;
+    auto ref_expm1 = std_expm1_double;
+    unary_fn<double> ref_exprel = {
+        [](double x) { return x+1==x? 1: std::expm1(x)/x; },
+        "std/exprel"
+    };
+#endif
     auto expm1_naive = [](double x) { return std::exp(x)-1.; };
 
     if (run_exp) {
-        harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, -0.1, 0.1);
-        harness<double>(cout, opt, "std::exp", stdexp, "exp_c", exp_c, exp_minarg, exp_maxarg);
+        harness<double>(cout, opt, ref_exp, {exp_c, "exp_c"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_exp, {exp_c, "exp_c"}, exp_minarg, exp_maxarg);
     }
+
     if (run_expm1) {
-        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_c", expm1_c, -0.1, 0.1);
-        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_c", expm1_c, exp_minarg, exp_maxarg);
+        harness<double>(cout, opt, ref_expm1, {expm1_c, "expm1_c"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_expm1, {expm1_c, "expm1_c"}, exp_minarg, exp_maxarg);
     }
+
+    if (run_exprel) {
+        harness<double>(cout, opt, ref_exprel, {exprel_c, "exprel_c"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_exprel, {exprel_c, "exprel_c"}, exp_minarg, exp_maxarg);
+    }
+
     if (run_expm1naive) {
-        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_naive", expm1_naive, -0.1, 0.1);
-        harness<double>(cout, opt, "std::expm1", stdexpm1, "expm1_naive", expm1_naive, exp_minarg, exp_maxarg);
+        harness<double>(cout, opt, ref_expm1, {expm1_naive, "expm1_naive"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_expm1, {expm1_naive, "expm1_naive"}, exp_minarg, exp_maxarg);
     }
+
     return 0;
 }

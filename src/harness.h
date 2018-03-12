@@ -1,16 +1,19 @@
+#pragma once
+
 #include <iostream>
 #include <iomanip>
 #include <random>
 
-#include "ulp_check.h"
 #include "common_opt.h"
+#include "unary_fn.h"
+#include "ulp_check.h"
 
-template <typename V, typename Ref, typename Eval>
+template <typename V>
 void harness(
     std::ostream& out,
     const common_opt& opt,
-    const char* ref_name,  Ref ref,
-    const char* eval_name, Eval eval,
+    const unary_fn<V>& ref,
+    const unary_fn<V>& eval,
     V lb, V ub)
 {
     using std::cout;
@@ -23,7 +26,7 @@ void harness(
 
     if (opt.raw) {
         out << "# lb=" << lb << "; ub=" << ub << '\n';
-        out << "# x " << ref_name << " " << eval_name << '\n';
+        out << "# x " << ref.name << " " << eval.name << '\n';
         for (std::size_t i = 0; i<opt.N; ++i) {
             double x = gen();
             out << std::setprecision(18)
@@ -31,11 +34,10 @@ void harness(
         }
     }
     else {
-        auto result = ulp_check(opt.N, ref, eval, gen);
+        auto result = ulp_check(opt.N, ref.fn, eval.fn, gen);
 
-        out << ref_name << " vs " << eval_name << " on [" << lb << ", " << ub << "]\n";
+        out << ref.name << " vs " << eval.name << " on [" << lb << ", " << ub << "]\n";
         pretty_print(out, result);
         out << '\n';
     }
 }
-
