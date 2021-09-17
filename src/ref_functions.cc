@@ -130,5 +130,22 @@ unary_fn<double> arb_exprel_double = {
     },
     "arb_exprel"
 };
+void exprelr(arb_t res, const arb_t x, slong prec) {
+    arb_t one, two;
+    arb_init(one);
+    arb_init(two);
+
+    arb_one(one);
+    arb_set_si(two, 2);
+    arb_hypgeom_1f1(res, one, two, x, false, prec);
+    arb_div(res, one, res, prec);
+}
+
+unary_fn<double> arb_exprelr_double = {
+    [](double x) {
+        return static_cast<double>(arb(x).apply(exprelr));
+    },
+    "arb_exprel"
+};
 
 #endif // def USE_ARB

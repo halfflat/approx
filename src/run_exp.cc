@@ -25,6 +25,11 @@ constexpr double Q3exp = 3.00198505138664455042E-6;
 constexpr double ln2C1 = 6.93145751953125E-1;
 constexpr double ln2C2 = 1.42860682030941723212E-6;
 
+// 52 bit cancellation-corrected ln(2) = ln2C1bis + ln2C2bis:
+
+constexpr double ln2C1bis = 0.6931471805599451752;
+constexpr double ln2C2bis = 1.34212770600978650e-16;
+
 // 1/ln(2):
 
 constexpr double ln2inv = 1.4426950408889634073599;
@@ -41,6 +46,22 @@ double exp_c(double x) {
     double n = std::floor(fma(ln2inv, x, 0.5));
     double g = fma(n, -ln2C1, x);
     g = fma(n, -ln2C2, g);
+
+    auto gg = g*g;
+
+    auto odd = g * horner(gg, P0exp, P1exp, P2exp);
+    auto even = horner(gg, Q0exp, Q1exp, Q2exp, Q3exp);
+
+    // Compute R(g)/R(-g) = 1 + 2*g*P(g^2) / (Q(g^2)-g*P(g^2))
+    auto expg = fma(2., odd/(even-odd), 1.);
+
+    return std::scalbn(expg, (int)n);
+}
+
+double exp_cbis(double x) {
+    double n = std::floor(fma(ln2inv, x, 0.5));
+    double g = fma(n, -ln2C1bis, x);
+    g = fma(n, -ln2C2bis, g);
 
     auto gg = g*g;
 
@@ -72,12 +93,12 @@ double expm1_c(double x) {
     return std::scalbn(expgm1, (int)n)+(std::scalbn(1., (int)n)-1.);
 }
 
-double std_exprel(double x) {
-    return x+1.==x? 1.: std::expm1(x)/x;
-}
-
 double exprel_c(double x) {
     return x+1.==x? 1.: expm1_c(x)/x;
+}
+
+double exprelr_c(double x) {
+    return x+1.==x? 1.: x/expm1_c(x);
 }
 
 int main(int argc, char** argv) {
@@ -86,22 +107,24 @@ int main(int argc, char** argv) {
 
     auto opt = common_options(argc, argv);
     if (opt.help) {
-        cout << "usage: run_exp [exp|expm1|exprel|expm1naive] [[OPTIONS]\n" << common_option_summary;
+        cout << "usage: run_exp [exp|expm1|exprel|exprelr|expm1naive] [[OPTIONS]\n" << common_option_summary;
         return 0;
     }
 
-    bool run_exp = false, run_expm1 = false, run_expm1naive = false, run_exprel = false;
+    bool run_exp = false, run_expm1 = false, run_expm1naive = false, run_exprel = false, run_exprelr = false;
     for (char** arg = argv+1; *arg; ++arg) {
         run_exp |= !strcmp(*arg, "exp");
         run_expm1 |= !strcmp(*arg, "expm1");
         run_expm1naive |= !strcmp(*arg, "expm1naive");
         run_exprel |= !strcmp(*arg, "exprel");
+        run_exprelr |= !strcmp(*arg, "exprelr");
     }
 
 #if USE_ARB
     auto ref_exp = arb_exp_double;
     auto ref_expm1 = arb_expm1_double;
     auto ref_exprel = arb_exprel_double;
+    auto ref_exprelr = arb_exprelr_double;
 #else
     auto ref_exp = std_exp_double;
     auto ref_expm1 = std_expm1_double;
@@ -109,22 +132,37 @@ int main(int argc, char** argv) {
         [](double x) { return x+1==x? 1: std::expm1(x)/x; },
         "std/exprel"
     };
+    unary_fn<double> ref_exprelr = {
+        [](double x) { return x+1==x? 1: x/std::expm1(x); },
+        "std/exprelr"
+    };
 #endif
     auto expm1_naive = [](double x) { return std::exp(x)-1.; };
 
     if (run_exp) {
         harness<double>(cout, opt, ref_exp, {exp_c, "exp_c"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_exp, {exp_c, "exp_c"}, 604.120, 604.124);
         harness<double>(cout, opt, ref_exp, {exp_c, "exp_c"}, exp_minarg, exp_maxarg);
+//
+        harness<double>(cout, opt, ref_exp, {exp_cbis, "exp_cbis"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_exp, {exp_c, "exp_c"}, 604.120, 604.124);
+        harness<double>(cout, opt, ref_exp, {exp_cbis, "exp_cbis"}, exp_minarg, exp_maxarg);
     }
 
     if (run_expm1) {
         harness<double>(cout, opt, ref_expm1, {expm1_c, "expm1_c"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_expm1, {expm1_c, "expm1_c"}, 0.49, 0.51);
         harness<double>(cout, opt, ref_expm1, {expm1_c, "expm1_c"}, exp_minarg, exp_maxarg);
     }
 
     if (run_exprel) {
         harness<double>(cout, opt, ref_exprel, {exprel_c, "exprel_c"}, -0.1, 0.1);
         harness<double>(cout, opt, ref_exprel, {exprel_c, "exprel_c"}, exp_minarg, exp_maxarg);
+    }
+
+    if (run_exprelr) {
+        harness<double>(cout, opt, ref_exprelr, {exprelr_c, "exprelr_c"}, -0.1, 0.1);
+        harness<double>(cout, opt, ref_exprelr, {exprelr_c, "exprelr_c"}, exp_minarg, exp_maxarg);
     }
 
     if (run_expm1naive) {

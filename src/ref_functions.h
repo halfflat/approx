@@ -22,5 +22,6 @@ extern unary_fn<double> arb_expm1_double;
 extern unary_fn<double> arb_log_double;
 extern unary_fn<double> arb_log1p_double;
 extern unary_fn<double> arb_exprel_double;
+extern unary_fn<double> arb_exprelr_double;
 
 #endif
